@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Weather App</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #6dd5ed, #2193b0);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width:200vh;
+      transition: background 1.2s ease-in-out, color 0.8s ease;
+    }
+
+    .container {
+      text-align: center;
+      background: #ffffffcc;
+      padding: 80px;
+      border-radius: 30px;
+      box-shadow: 0 0 10px #00000055;
+      width: 700px;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      width: 80%;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      margin-top: 15px;
+      font-size: 16px;
+    }
+
+    button {
+      margin: 10px 5px 0;
+      padding: 8px 16px;
+      background-color: #2193b0;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.4s;
+    }
+
+    button:hover {
+      background-color: #17627d;
+    }
+
+    .weather {
+      margin-top: 15px;
+      font-size: 20px;
+    }
+
+    .history {
+      margin-top: 20px;
+    }
+
+    .history button {
+      background-color: #ccc;
+      color: #333;
+      font-size: 13px;
+      padding: 5px 10px;
+    }
+
+    .history button:hover {
+      background-color: #bbb;
+    }
+    .forecast {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  margin-top: 8px;
+  gap: 10px;
+}
+
+.forecast-day {
+  background-color: #ffffffcc;
+  padding: 10px;
+  border-radius: 10px;
+  width: 65px;
+  height:95px;
+  box-shadow: 0 0 5px #888;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom:10px;
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌦 Weather App</h1>
+    <input type="text" id="cityInput" placeholder="Enter city name">
+    <button onclick="getWeather()">Get Weather</button>
+    <div class="weather" id="weatherInfo"></div>
+    <div class="history" id="historyButtons"></div>
+    <h3 style="margin-top: 20px;">📅 5-Day Forecast</h3>
+<div class="forecast" id="forecastInfo"></div>
+  </div>
+
+  <script>
+    const apiKey = "809de0e0011cf98cc83f6b8c316b5754";
+
+    function getWeather(cityParam = null) {
+      const city = cityParam || document.getElementById("cityInput").value.trim();
+      if (!city) return;
+
+      const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;
+
+      fetch(url)
+        .then(response => {
+          if (!response.ok) throw new Error("City not found");
+          return response.json();
+        })
+        .then(data => {
+          const iconCode = data.weather[0].icon;
+          const iconUrl = `http://openweathermap.org/img/wn/${iconCode}@2x.png`;
+
+          const currentTime = Math.floor(Date.now() / 1000);
+          const { sunrise, sunset } = data.sys;
+          const isDay = currentTime > sunrise && currentTime < sunset;
+
+          // Set background
+          document.body.style.background = isDay
+            ? "linear-gradient(to right, #6dd5ed, #2193b0)"
+            : "linear-gradient(to right, #2c3e50, #000000)";
+
+          // Update UI
+          const weatherHTML = `
+            <p><strong>${data.name}</strong>, ${data.sys.country}</p>
+            <img src="${iconUrl}" alt="Weather icon">
+            <p>🌡 Temperature: ${data.main.temp}°C</p>
+            <p>☁ Weather: ${data.weather[0].description}</p>
+            <p>💨 Wind: ${data.wind.speed} m/s</p>
+          `;
+          document.getElementById("weatherInfo").innerHTML = weatherHTML;
+
+          // Update history
+          saveToHistory(data.name);
+          getForecast(data.name);
+        })
+        .catch(() => {
+          document.getElementById("weatherInfo").innerHTML = "❌ City not found. Try again.";
+        });
+    }
+
+    function saveToHistory(city) {
+      let history = JSON.parse(localStorage.getItem("weatherHistory")) || [];
+      if (!history.includes(city)) {
+        history.unshift(city); // Add new at top
+        if (history.length > 8) history.pop(); // Keep max 5
+        localStorage.setItem("weatherHistory", JSON.stringify(history));
+      }
+      displayHistory();
+    }
+
+    function displayHistory() {
+      const historyDiv = document.getElementById("historyButtons");
+      const history = JSON.parse(localStorage.getItem("weatherHistory")) || [];
+      historyDiv.innerHTML = history.map(city => `
+        <button onclick="getWeather('${city}')">${city}</button>
+      `).join('');
+    }
+
+    // Load history on page load
+    displayHistory();
+    function getForecast(city) {
+  const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${apiKey}&units=metric`;
+
+  fetch(forecastUrl)
+    .then(response => response.json())
+    .then(data => {
+      const forecastDiv = document.getElementById("forecastInfo");
+      const daily = {};
+
+      data.list.forEach(item => {
+        const date = item.dt_txt.split(" ")[0];
+        const time = item.dt_txt.split(" ")[1];
+
+        // Only take the 12:00:00 data for each day
+        if (time === "12:00:00" && !daily[date]) {
+          daily[date] = item;
+        }
+      });
+
+      const forecastHTML = Object.keys(daily).slice(0, 5).map(date => {
+        const f = daily[date];
+        const dayName = new Date(f.dt_txt).toLocaleDateString("en-US", { weekday: 'short' });
+        return `
+          <div class="forecast-day">
+            <strong>${dayName}</strong>
+            <img src="http://openweathermap.org/img/wn/${f.weather[0].icon}.png" alt="icon">
+            <div>${f.main.temp.toFixed(0)}°C</div>
+            <div>${f.weather[0].main}</div>
+          </div>`;
+      }).join("");
+
+      forecastDiv.innerHTML = forecastHTML;
+    })
+    .catch(() => {
+      document.getElementById("forecastInfo").innerHTML = "⚠ Unable to load forecast.";
+    });
+}
+
+  </script>
+</body>
+</html>
